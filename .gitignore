@@ -1,0 +1,5 @@
+*.pyc
+res/
+train/
+MNIST_data/
+
