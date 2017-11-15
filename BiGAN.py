@@ -1,9 +1,9 @@
 import os
+import shutil
 import time
 import numpy as np
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
-from misc import leaky_relu
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 from tensorflow.examples.tutorials.mnist import input_data
@@ -17,15 +17,15 @@ LOG_FREQUENCY = 1000
 def inference_discriminator(placeholder_input, reuse=False):
     with tf.variable_scope('discriminator', reuse=reuse):
         d_net = slim.fully_connected(placeholder_input, 128, activation_fn=tf.nn.relu, reuse=reuse, scope='dis1')
-        #d_net = slim.fully_connected(d_net, 1024, activation_fn=tf.nn.relu, reuse=reuse, scope='dis2')
+        #d_net = slim.fully_connected(d_net, 32, activation_fn=tf.nn.relu, reuse=reuse, scope='dis2')
         d_net = slim.fully_connected(d_net, 1, activation_fn=tf.nn.sigmoid, reuse=reuse, scope='dis3')
     return d_net
 
 
 def inference_generator(placeholder_latent, reuse=False):
     with tf.variable_scope('generator', reuse=reuse):
-        d_net = slim.fully_connected(placeholder_latent, 128, activation_fn=tf.nn.relu, reuse=reuse, scope='gen1')
-        #d_net = slim.fully_connected(d_net, 1024, activation_fn=tf.nn.relu, reuse=reuse, scope='gen2')
+        d_net = slim.fully_connected(placeholder_latent, 32, activation_fn=tf.nn.relu, reuse=reuse, scope='gen1')
+        #d_net = slim.fully_connected(d_net, 128, activation_fn=tf.nn.relu, reuse=reuse, scope='gen2')
         d_net = slim.fully_connected(d_net, INPUT_DIM, activation_fn=tf.nn.sigmoid, reuse=reuse, scope='gen3')
     return d_net
 
@@ -58,18 +58,11 @@ def placeholders():
     return placeholder_input, placeholder_latent
 
 
-def fill_feed_dictionary_for_discriminator(dataset, placeholder_input, placeholder_latent):
-    input_next, _ = dataset.next_batch(BATCH_SIZE)
-    latent_next = np.random.uniform(-1.0, 1.0, size=[BATCH_SIZE, LATENT_DIM])
-    return {
-        placeholder_input: input_next,
-        placeholder_latent: latent_next
-    }
-
-
-def fill_feed_dictionary_for_generator(placeholder_latent, nsamples=BATCH_SIZE):
+def fill_feed_dictionary(dataset, placeholder_input, placeholder_latent, nsamples=BATCH_SIZE):
+    input_next, _ = dataset.next_batch(nsamples)
     latent_next = np.random.uniform(-1.0, 1.0, size=[nsamples, LATENT_DIM])
     return {
+        placeholder_input: input_next,
         placeholder_latent: latent_next
     }
 
@@ -104,8 +97,14 @@ def run_training(max_epochs):
         # Create session
         init = tf.global_variables_initializer()
         sess = tf.Session()
-        tf.summary.FileWriter('./train', sess.graph).close()
         sess.run(init)
+
+        # Summaries
+        tf.contrib.layers.summarize_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+        tf.summary.scalar('loss_D', loss_exp_discriminator)
+        tf.summary.scalar('loss_G', loss_exp_generator)
+        merged = tf.summary.merge_all()
+        summary_writer = tf.summary.FileWriter('./summaries', sess.graph)
 
         print('%-20s | %-30s | %-30s' % ('Epoch', 'Loss(Discriminator)', 'Loss(Generator)'))
         print('-' * 86)
@@ -113,16 +112,20 @@ def run_training(max_epochs):
 
             # Train the neural network graph
             start_time = time.time()
-            _, loss_val_d = sess.run([train_op_discriminator, loss_exp_discriminator], feed_dict=fill_feed_dictionary_for_discriminator(dataset.train, placeholder_input, placeholder_latent))
-            _, loss_val_g = sess.run([train_op_generator, loss_exp_generator], feed_dict=fill_feed_dictionary_for_generator(placeholder_latent))
+            summary_d, _, loss_val_d = sess.run([merged, train_op_discriminator, loss_exp_discriminator], feed_dict=fill_feed_dictionary(dataset.train, placeholder_input, placeholder_latent))
+            summary_g, _, loss_val_g = sess.run([merged, train_op_generator, loss_exp_generator], feed_dict=fill_feed_dictionary(dataset.train, placeholder_input, placeholder_latent))
             duration = time.time() - start_time
+            summary_writer.add_summary(summary_d, step)
+            summary_writer.add_summary(summary_g, step)
 
             # Visualize and report train stats
             if step % LOG_FREQUENCY == 0:
                 print('%-20s | %-30s | %-30s' % ('%d' % (step), '%.5f' % (loss_val_d), '%.5f' % (loss_val_g)))
-                samples = sess.run(output_generator, feed_dict=fill_feed_dictionary_for_generator(placeholder_latent, 25))
+                samples = sess.run(output_generator, feed_dict=fill_feed_dictionary(dataset.train, placeholder_input, placeholder_latent, 25))
                 visualize_samples(samples, step)
 
 
 if __name__=='__main__':
+    if(os.path.exists('summaries')):
+        shutil.rmtree('summaries')
     run_training(50001)

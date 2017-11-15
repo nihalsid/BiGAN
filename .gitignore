@@ -1,5 +1,6 @@
 *.pyc
 res/
-train/
+summaries/
+.idea/
 MNIST_data/
 
