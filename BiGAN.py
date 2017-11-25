@@ -12,8 +12,8 @@ import tensorflow.contrib.slim as slim
 from tensorflow.examples.tutorials.mnist import input_data
 
 INPUT_DIM = 28 * 28
-LATENT_DIM = 50
-BATCH_SIZE = 50
+LATENT_DIM = 64
+BATCH_SIZE = 32
 LOG_FREQUENCY = 1000
 LEARNING_RATE = 1e-3
 
@@ -40,7 +40,7 @@ def inference_generator(placeholder_latent, reuse=False):
 def inference_encoder(placeholder_input, reuse=False):
     with tf.variable_scope('encoder', reuse=reuse):
         d_net = slim.fully_connected(placeholder_input, 128, activation_fn=tf.nn.relu, reuse=reuse, scope='enc1')
-        d_net = slim.fully_connected(d_net, LATENT_DIM, reuse=reuse, scope='enc3')
+        d_net = slim.fully_connected(d_net, LATENT_DIM, activation_fn=None, reuse=reuse, scope='enc3')
     return d_net
 
 
